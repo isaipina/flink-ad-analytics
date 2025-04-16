@@ -22,7 +22,7 @@ Este proyecto implementa un pipeline de análisis en tiempo real utilizando Apac
 * kafka-python, Pandas
 
 ## Estructura del Proyecto
-
+.
 ├── docker-compose.yml      # Define todos los servicios Docker
 ├── flink/
 │   ├── flink_job.sql       # Job Flink SQL principal (CTR/Engagement) - Usa COUNT(DISTINCT)
