@@ -1,0 +1,24 @@
+# Ignorar directorio de JARS descargados
+flink-jars/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Entornos virtuales de Python
+venv/
+env/
+.env
+.venv
+
+# Archivos específicos de SO
+.DS_Store
+Thumbs.db
+
+# Archivos de IDEs (ejemplos)
+.idea/
+.vscode/
+*.suo
+*.user

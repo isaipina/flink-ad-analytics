@@ -1,0 +1,134 @@
+# ./docker-compose.yml (Actualizado)
+version: '3.8'
+
+services:
+  # Zookeeper for Kafka coordination
+  zookeeper:
+    image: bitnami/zookeeper:3.8
+    container_name: zookeeper-1
+    ports:
+      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - flink-network
+
+  # Kafka for event streaming
+  kafka:
+    image: bitnami/kafka:3.4
+    container_name: kafka
+    ports:
+      - "9092:9092" # Puerto para conexión externa (e.g., localmente)
+    environment:
+      - KAFKA_BROKER_ID=1
+      # Listener interno para comunicación entre contenedores (e.g., Flink -> Kafka)
+      - KAFKA_CFG_LISTENERS=INTERNAL://:9093,EXTERNAL://:9092
+      # Cómo los clientes se conectan desde dentro y fuera de la red Docker
+      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9093,EXTERNAL://localhost:9092
+      # Protocolos de seguridad para cada listener
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      # Listener que usan los otros componentes de Kafka internamente
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper-1:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true # Aunque creamos explícitamente, es útil tenerlo
+    depends_on:
+      - zookeeper
+    networks:
+      - flink-network
+
+  # Kafka initialization - Crear tópicos de entrada Y SALIDA
+  kafka-setup:
+    image: bitnami/kafka:3.4
+    container_name: kafka-setup
+    depends_on:
+      - kafka
+    command: >
+      bash -c "
+        echo 'Esperando a que Kafka esté listo (usando sleep)...' &&
+        sleep 30 && # Revertir a sleep simple, ajustar tiempo si es necesario (e.g., 30 segundos)
+        echo 'Kafka debería estar listo. Creando tópicos...' &&
+        kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9093 --replication-factor 1 --partitions 4 --topic ad-impressions &&
+        kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9093 --replication-factor 1 --partitions 4 --topic ad-clicks &&
+        kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9093 --replication-factor 1 --partitions 4 --topic ctr_results &&
+        kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9093 --replication-factor 1 --partitions 4 --topic engagement_results &&
+        kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9093 --replication-factor 1 --partitions 1 --topic anomaly_alerts && 
+
+        echo 'Tópicos de Kafka creados (o ya existían).'
+      "
+    # Añade 'cub' para la espera robusta (requiere internet en build o imagen pre-construida)
+    # Si 'cub' no está disponible, revertir a 'sleep 30' pero es menos fiable
+    environment:
+      - KAFKA_BROKER=kafka:9093 # Usar listener interno
+    networks:
+      - flink-network
+
+  # Flink JobManager
+  jobmanager:
+    image: flink:1.17-scala_2.12 # Usa una versión reciente de Flink
+    container_name: flink-jobmanager
+    ports:
+      - "8081:8081" # Flink UI
+    command: jobmanager
+    environment:
+      FLINK_PROPERTIES: |  # Usamos un string multi-línea para FLINK_PROPERTIES
+        jobmanager.rpc.address: jobmanager
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+        state.savepoints.dir: file:///opt/flink/savepoints
+        high-availability: none
+    volumes:
+      - ./flink:/opt/flink/usrlib # Montar directorio para scripts/jars
+      - ./flink-jars/flink-sql-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-sql-connector-kafka-1.17.2.jar
+      - flink_checkpoints:/opt/flink/checkpoints
+      - flink_savepoints:/opt/flink/savepoints
+    networks:
+      - flink-network
+    depends_on:
+      - kafka # Asegurar que Kafka inicie antes
+
+  # Flink TaskManager
+  taskmanager:
+    image: flink:1.17-scala_2.12
+    container_name: flink-taskmanager
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: | # También usamos FLINK_PROPERTIES aquí
+        jobmanager.rpc.address: jobmanager # El TaskManager necesita saber dónde está el JobManager
+        taskmanager.numberOfTaskSlots: 2
+        state.backend: rocksdb # Mantenemos la consistencia con el JobManager
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+    volumes:
+      - flink_checkpoints:/opt/flink/checkpoints # Compartir volumen para checkpoints si es necesario (aunque file:// es local al contenedor)
+      - ./flink-jars/flink-sql-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-sql-connector-kafka-1.17.2.jar
+    networks:
+      - flink-network
+    depends_on:
+      - jobmanager # Asegurar que JobManager esté listo
+
+  # Data Generator
+  data-generator:
+    build:
+      context: ./data-generator
+      dockerfile: Dockerfile
+    container_name: data-generator
+    depends_on:
+      - kafka-setup # Esperar a que los tópicos estén creados
+    environment:
+      - KAFKA_BROKER=kafka:9093 # Usar listener interno
+      - IMPRESSION_TOPIC=ad-impressions
+      - CLICK_TOPIC=ad-clicks
+      - EVENT_RATE=50  # Eventos por segundo
+      - CLICK_RATIO=0.1  # 10% de impresiones generan clics
+    networks:
+      - flink-network
+
+# Red para comunicación entre contenedores
+networks:
+  flink-network:
+    driver: bridge
+
+# Volúmenes para persistencia de estado de Flink (opcional pero recomendado)
+volumes:
+  flink_checkpoints:
+  flink_savepoints:
