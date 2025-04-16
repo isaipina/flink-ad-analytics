@@ -22,23 +22,23 @@ Este proyecto implementa un pipeline de análisis en tiempo real utilizando Apac
 * kafka-python, Pandas
 
 ## Estructura del Proyecto
-.
-├── docker-compose.yml      # Define todos los servicios Docker
-├── flink/
-│   ├── flink_job.sql       # Job Flink SQL principal (CTR/Engagement) - Usa COUNT(DISTINCT)
-│   └── anomaly_job.sql     # Job Flink SQL secundario (Detección Anomalías)
-├── flink-jars/
-│   └── flink-sql-connector-kafka-1.17.2.jar # Conector Kafka (Requiere descarga manual)
-├── data-generator/
-│   ├── Dockerfile
-│   ├── generate_events.py  # Script generador de datos (con fases controladas)
-│   └── requirements.txt
-├── dashboard/
-│   ├── Dockerfile
-│   ├── streamlit_app.py    # Script dashboard Streamlit
-│   └── requirements.txt
-├── .gitignore              # Ignora flink-jars/, pycache, etc.
-└── README.md               
+    .
+    ├── docker-compose.yml      # Define todos los servicios Docker
+    ├── flink/
+    │   ├── flink_job.sql       # Job Flink SQL principal (CTR/Engagement) - Usa COUNT(DISTINCT)
+    │   └── anomaly_job.sql     # Job Flink SQL secundario (Detección Anomalías)
+    ├── flink-jars/
+    │   └── flink-sql-connector-kafka-1.17.2.jar # Conector Kafka (Requiere descarga manual)
+    ├── data-generator/
+    │   ├── Dockerfile
+    │   ├── generate_events.py  # Script generador de datos (con fases controladas)
+    │   └── requirements.txt
+    ├── dashboard/
+    │   ├── Dockerfile
+    │   ├── streamlit_app.py    # Script dashboard Streamlit
+    │   └── requirements.txt
+    ├── .gitignore              # Ignora flink-jars/, pycache, etc.
+    └── README.md               
 
 ## Prerrequisitos del Evaluador
 
